@@ -748,7 +748,7 @@ else:
 
 
 def parse_tlvs (extraptr, dbg):
-    tlv_start = bytes(extraptr)                             # copy the tlvspace
+    tlv_start = util.stringify3(extraptr)                   # copy the tlvspace
 
     tlvs = defaultdict(list)
     v = None

@@ -21,7 +21,10 @@ def as_string (cobj):
 
 
 def cast_as (bufptr, ctype):
-    return cast(bufptr, POINTER(ctype)).contents
+    if type(bufptr) == memoryview:
+        return ctype.from_buffer(bufptr)
+    else:
+        return cast(bufptr, POINTER(ctype)).contents
 
 
 def copy_as (s, ctype):
@@ -117,7 +120,10 @@ else:
             return buffer(val)                              # pylint: disable=E0602
 
     def stringify3 (b):
-        return str(buffer(b))                               # pylint: disable=E0602
+        if type(b) == memoryview:
+            return b.tobytes()
+        else:
+            return str(buffer(b))                           # pylint: disable=E0602
 
     monotonic = compat3.monotonic_time
 

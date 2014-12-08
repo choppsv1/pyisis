@@ -27,8 +27,7 @@ MAX_AGE = 1200
 
 
 def get_lsp_number (lsphdr):
-    return tlvrdb(lsphdr.lspid[clns.CLNS_LSP_SEGMENT_OFF])
-
+    return int(lsphdr.lspid[clns.CLNS_LSP_SEGMENT_OFF])
 
 def lsp_id_str (lsp):
     return clns.iso_decode(lsp.lspid)
@@ -275,7 +274,7 @@ class OwnLSP (object):
         pdubuf = pdubuf[:lsp.pdu_len]
 
         # XXX cast_as doesn't like bytearray or a memoryview of it, copy into string
-        pdubuf = stringify3(pdubuf)
+        # pdubuf = stringify3(pdubuf)
 
         # Re-get the start using new sized buffer.
         tlvstart = self.get_tlv_start(lsp, pdubuf)

@@ -85,7 +85,10 @@ class TraceDumper(threading.Thread):
         fout = open(self.fpath, "wb+")  # pylint: disable=W0141  # pylint: disable=W1501
         try:
             output = stacktraces()
-            fout.write(bytes(output, 'ascii'))
+            if sys.version_info >= (3, 0):
+                fout.write(bytes(output, 'ascii'))
+            else:
+                fout.write(output)
         finally:
             fout.close()
 
