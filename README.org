@@ -1,0 +1,32 @@
+#+TITLE: README
+#+AUTHOR: Christian E. Hopps
+#+EMAIL: chopps@gmail.com
+#+STARTUP: indent
+
+* A partial implementation of the IS-IS routing protocol.
+
+This is a partial implementation of the IS-IS routing protocol (ISO 10589).
+
+** Features (or lack of):
+
+   Missing items:
+   - SPF (Decision process).
+   - Point-to-point links.
+   - Prefix distribution.
+   - Many legacy TLVs (e.g., narrow metrics).
+   - Many extension RFCS.
+
+   What's there:
+   - Broadcast Link Support.
+   - Adjacencies (Hello process).
+   - Flooding (Update process).
+   - LSP generation (Update process).
+   - DIS and non-DIS functionality.
+
+   Sub-optimal impementation points:
+   - No flooding dampening.
+
+** Unit tests
+   There exists some unit tests for some important parts of the library support
+   code. However, there are not tests for the larger procotol
+   functionality. This would be very nice to have.
