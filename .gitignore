@@ -1,0 +1,9 @@
+build/
+pyisis.egg-info/
+*.pyc
+.lint-*
+flycheck_*.py
+*.so
+GPATH
+GRTAGS
+GTAGS
