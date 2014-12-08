@@ -3,7 +3,7 @@
 #+EMAIL: chopps@gmail.com
 #+STARTUP: indent
 
-* A partial implementation of the IS-IS routing protocol.
+* The IS-IS routing protocol (partial)
 
 This is a partial implementation of the IS-IS routing protocol (ISO 10589).
 
