@@ -21,9 +21,9 @@ def as_string (cobj):
 
 
 def cast_as (bufptr, ctype):
-    if type(bufptr) == memoryview:
+    try:
         return ctype.from_buffer(bufptr)
-    else:
+    except TypeError:
         return cast(bufptr, POINTER(ctype)).contents
 
 

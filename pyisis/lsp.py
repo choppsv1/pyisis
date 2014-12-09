@@ -29,6 +29,7 @@ MAX_AGE = 1200
 def get_lsp_number (lsphdr):
     return int(lsphdr.lspid[clns.CLNS_LSP_SEGMENT_OFF])
 
+
 def lsp_id_str (lsp):
     return clns.iso_decode(lsp.lspid)
 
@@ -38,9 +39,7 @@ class LSPSegment (object):
         self.inst = inst
         self.uproc = inst.update[lindex]
         self.lindex = lindex
-        self.pdubuf = stringify3(pdubuf)
-        self.purge_pdubuf = None                            # After header TLV space
-        # pdubuf is the CLNS part of a frame forward.
+        self.pdubuf = bytearray(pdubuf)
         self.lsphdr = util.cast_as(self.pdubuf, pdu.LSPPDU)
         self.tlvview = memoryview(self.pdubuf)[self.lsphdr.clns_len:]
         self.tlvs = tlvs
@@ -79,11 +78,8 @@ class LSPSegment (object):
     def update (self, pdubuf, tlvs):
         """Update the segment based on received packet"""
         with self.purge_lock:
-            self.pdubuf = stringify3(pdubuf)
-            offset = pdu.LSPFrame.lsp_header.offset - pdu.LSPFrame.clns_header.offset  # pylint: disable=E1101
-            # XX this appears to be causing us to exit silently
+            self.pdubuf = bytearray(pdubuf)
             self.lsphdr = util.cast_as(self.pdubuf, pdu.LSPPDU)
-            # self.lsphdr = util.copy_as(self.pdubuf[offset:], pdu.LSPHeader)
             self.tlvs = tlvs
 
             # This LSP is being purged.
