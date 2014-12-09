@@ -11,17 +11,15 @@ from __future__ import absolute_import, division, nested_scopes, print_function,
 import argparse
 from pyisis.instance import Instance
 import pyisis.clns as clns
-import pyisis.lib.threads as threads
 import logbook
 import pdb
 import signal
 import sys
-# bytearray, from_buffer, from_buffer_copy
 
-# logging.basicConfig(level=logging.DEBUG)
 logger = logbook.Logger(__name__)
 
 import pyisis.lib.stacktracer as stacktracer
+
 # Set auto flag to always update file!
 stacktracer.trace_start("trace.html", interval=5, auto=True)
 
@@ -83,7 +81,7 @@ def main ():
             inst.linkdb.process_packets()
     except Exception as ex:
         logger.error("UNEXPECTED EXCEPTION: {}", ex)
-    except:
+    except:                                                 # pylint: disable=W0702
         logger.error("UNEXPECTED EXCEPTION")
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@
 # REDISTRIBUTION IN ANY FORM PROHIBITED WITHOUT PRIOR WRITTEN
 # CONSENT OF THE AUTHOR.
 
-from pyisis.util import tlvrdb, tlvwrb
+from pyisis.lib.util import tlvrdb, tlvwrb
 
 
 def test_tlvrdb ():

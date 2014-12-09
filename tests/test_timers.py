@@ -8,10 +8,10 @@
 # CONSENT OF THE AUTHOR.
 #
 from __future__ import absolute_import, division, unicode_literals, print_function, nested_scopes
-import pyisis.timers as timers
+import pyisis.lib.timers as timers
 import time
 
-from pyisis.util import xrange3
+from pyisis.lib.util import xrange3
 
 
 def test_simple_timers ():

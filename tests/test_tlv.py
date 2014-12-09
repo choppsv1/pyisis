@@ -7,9 +7,9 @@
 # REDISTRIBUTION IN ANY FORM PROHIBITED WITHOUT PRIOR WRITTEN
 # CONSENT OF THE AUTHOR.
 from __future__ import absolute_import, division, nested_scopes, print_function, unicode_literals
-from pyisis.bstr import bchr, memspan
-from pyisis.util import stringify3, tlvrdb, tlvwrb, xrange3
-from pyisis.tlv import *
+from pyisis.bstr import bchr, memspan                       # pylint: disable=E0611
+from pyisis.lib.util import tlvwrb, xrange3
+import pyisis.tlv as tlv
 
 
 def test_tlv_append ():
@@ -19,18 +19,18 @@ def test_tlv_append ():
     >>> tlvview = memoryview(buf)
     >>> tlvdata = tlvview[2:]
     >>> tlvview[0] = tlvwrb(3)
-    >>> tlvview, tlvdata = tlv_append_value(tlvview, tlvdata, bufdata)
+    >>> tlvview, tlvdata = tlv.tlv_append_value(tlvview, tlvdata, bufdata)
     >>> tlvdata.tobytes() == b'\\x00\\x00\\x00\\x00\\x00'
     True
     >>> bufdata = bytearray(b'\\xfe\\xfe\\xfe')
-    >>> tlvview, tlvdata = tlv_append_value(tlvview, tlvdata, bufdata)
+    >>> tlvview, tlvdata = tlv.tlv_append_value(tlvview, tlvdata, bufdata)
     >>> len(tlvdata)
     2
     >>> tlvview.tobytes() == b'\\x03\\x00\\xff\\xff\\xff\\xfe\\xfe\\xfe\\x00\\x00'
     True
-    >>> tlv_append_value(tlvview, tlvdata, bufdata)
+    >>> tlv.tlv_append_value(tlvview, tlvdata, bufdata)
     (None, None)
-    >>> ntlvview, tlvdata = tlv_append_close(tlvview, tlvdata)
+    >>> ntlvview, tlvdata = tlv.tlv_append_close(tlvview, tlvdata)
     >>> tlvview.tobytes() == b'\\x03\\x06\\xff\\xff\\xff\\xfe\\xfe\\xfe\\x00\\x00'
     True
     >>> ntlvview.tobytes() == b'\\x00\\x00'
@@ -49,7 +49,7 @@ def test_tlv_insert_entries ():
                 yield testval
         return value_iter
 
-    def new_buf_func (args):
+    def new_buf_func (tlvview, args):
         buflist = args[0]
         sz = args[1]
         buf = memoryview(bytearray(b"\xAF" * sz))
@@ -60,12 +60,12 @@ def test_tlv_insert_entries ():
     code = 2
     bufsize = len(testval) * 2 + 2
     buflist = []
-    buf = new_buf_func((buflist, bufsize))[0]
-    tlvbuf, args = tlv_insert_entries(code,
-                                      buf,
-                                      get_value_iter(2),
-                                      new_buf_func,
-                                      (buflist, bufsize))
+    buf = new_buf_func(None, (buflist, bufsize))[0]
+    tlvbuf, args = tlv.tlv_insert_entries(code,
+                                          buf,
+                                          get_value_iter(2),
+                                          new_buf_func,
+                                          (buflist, bufsize))
     assert len(args[0]) == 1
     assert args[0][0] == buf
     assert buf == bchr(code) + bchr(16) + testval * 2
@@ -75,12 +75,12 @@ def test_tlv_insert_entries ():
     # Test insertion of 2 TLVS with 1 byte leftover
     bufsize = len(testval) * 2 + 3
     buflist = []
-    buf = new_buf_func((buflist, bufsize))[0]
-    tlvbuf, args = tlv_insert_entries(code,
-                                      buf,
-                                      get_value_iter(2),
-                                      new_buf_func,
-                                      (buflist, bufsize))
+    buf = new_buf_func(None, (buflist, bufsize))[0]
+    tlvbuf, args = tlv.tlv_insert_entries(code,
+                                          buf,
+                                          get_value_iter(2),
+                                          new_buf_func,
+                                          (buflist, bufsize))
     assert len(args[0]) == 1
     assert args[0][0] == buf
     assert buf == bchr(code) + bchr(16) + testval * 2 + b"\xAF"
@@ -90,11 +90,11 @@ def test_tlv_insert_entries ():
     # Test insertion of 2 TLVS using new_buf_func
     bufsize = len(testval) * 2 + 3
     buflist = []
-    tlvbuf, args = tlv_insert_entries(code,
-                                      None,
-                                      get_value_iter(2),
-                                      new_buf_func,
-                                      (buflist, bufsize))
+    tlvbuf, args = tlv.tlv_insert_entries(code,
+                                          None,
+                                          get_value_iter(2),
+                                          new_buf_func,
+                                          (buflist, bufsize))
     assert len(args[0]) == 1
     buf = args[0][0]
     assert buf == bchr(code) + bchr(16) + testval * 2 + b"\xAF"
@@ -104,11 +104,11 @@ def test_tlv_insert_entries ():
     # Test insertion of 3 TLVS using new_buf_func
     bufsize = len(testval) * 2 + 3
     buflist = []
-    tlvbuf, args = tlv_insert_entries(code,
-                                      None,
-                                      get_value_iter(3),
-                                      new_buf_func,
-                                      (buflist, bufsize))
+    tlvbuf, args = tlv.tlv_insert_entries(code,
+                                          None,
+                                          get_value_iter(3),
+                                          new_buf_func,
+                                          (buflist, bufsize))
     assert len(args[0]) == 2
     buf = args[0][0]
     assert buf == bchr(code) + bchr(len(testval) * 2) + testval * 2 + b"\xAF"
