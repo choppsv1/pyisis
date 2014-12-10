@@ -11,6 +11,7 @@ stacktracer.stop_trace()
 """
 from __future__ import absolute_import, division, nested_scopes, print_function # , unicode_literals
 
+import gc
 import sys
 import traceback
 from pygments import highlight
@@ -23,6 +24,7 @@ from pyisis.lib.threads import thread_mapping
 
 def stacktraces():
     code = []
+    gc.collect()
     for threadId, stack in sys._current_frames().items():  # pylint: disable=W0212
         try:
             name = thread_mapping[threadId].name

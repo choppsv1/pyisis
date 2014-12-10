@@ -107,33 +107,39 @@ class TimerHeap (object):
             heapq.heappush(self.heap, timer)
 
             # Check to see if we need to reschedule our main timer.
-            if self.heap[0] != top:
+            # Only do this if we aren't expiring in the other thread.
+            if self.heap[0] != top and not self.expiring:
                 if self.rtimer:
                     self.rtimer.cancel()
-                    self.rtimer.join()
-            top = self.heap[0]
+                    # self.rtimer.join()
+                    self.rtimer = None
 
             # If we are expiring timers right now then that will reschedule
-            # as appropriate
-            if not self.expiring:
-                self.rtimer = ThreadTimer(self.desc, timer.expire - time.time(), self.expire)
+            # as appropriate otherwise let's start a timer if we don't have
+            # one
+            if self.rtimer is None and not self.expiring:
+                top = self.heap[0]
+                ival = top.expire - time.time()
+                if ival < 0:
+                    ival = 0
+                self.rtimer = ThreadTimer(self.desc, ival, self.expire)
                 self.rtimer.start()
 
     def expire (self):
         try:
+            # Set expiring variable and forget old timer.
+            with self.lock:
+                self.expiring = True
+                self.rtimer = None
+
             while True:
                 with self.lock:
-                    self.expiring = True
-                    self.rtimer = None
-
                     if not self.heap:
                         return
 
                     top = self.heap[0]
                     ctime = time.time()
                     if top.expire > ctime:
-                        self.rtimer = ThreadTimer(self.desc, top.expire - ctime, self.expire)
-                        self.rtimer.start()
                         return
 
                     # remove the timer
@@ -147,7 +153,18 @@ class TimerHeap (object):
             logger.error("Unexpected Exception: {}", ex)
             debug_exception()
         finally:
+            # This is never set while expiring is True
+            assert self.rtimer is None
+
             with self.lock:
+                # Now grab the next timer and set our real-time timer and unset expiring
+                if self.heap:
+                    top = self.heap[0]
+                    ival = top.expire - time.time()
+                    if ival < 0:
+                        ival = 0
+                    self.rtimer = ThreadTimer(self.desc, ival, self.expire)
+                    self.rtimer.start()
                 self.expiring = False
 
     def _remove (self, timer):
