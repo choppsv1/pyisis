@@ -157,12 +157,12 @@ class RawInterface (object):
         output = subprocess.check_output("/sbin/ifconfig {}".format(ifname),
                                          shell=True,
                                          universal_newlines=True)
-        match = re.search(r"HWaddr ([a-zA-Z0-9:]+)", output)
+        match = re.search(r"(?:HWaddr|ether) ([a-zA-Z0-9:]+)", output)
         assert match
         mac_addr = clns.mac_encode(match.group(1))
 
         # inet addr:192.168.1.10  Bcast:192.168.1.255  Mask:255.255.255.0
-        match = re.search(r"inet addr:([0-9\.]+).*Mask:([0-9\.]+)", output)
+        match = re.search(r"inet (?:addr:)?([0-9\.]+).*(?:Mask:|netmask )([0-9\.]+)", output)
         # mask = ipaddress.ip_address(match.group(2))
         ipv4_prefix = ipaddress.ip_interface('{}/{}'.format(*match.groups()))
         # ipv4_prefix = ipaddress.ip_interface('{}/24'.format(match.group(1)))

@@ -427,7 +427,7 @@ class IPV6PrefixEntry (object):
         self.subtlv = True if entry.subtlv else False
         blen = pfxlen2bytes(self.pfxlen)
         start = sizeof(_IPV6Prefix)
-        aval = value[start:start + blen] + '\x00' * (16 - blen)
+        aval = value[start:start + blen] + b"\x00" * (16 - blen)
         self.addr = ipaddress.ip_address(aval)
 
         # Sub-TLV processing.
