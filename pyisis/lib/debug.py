@@ -25,7 +25,7 @@ PKTDBGTYPE = {
     # clns.PDU_TYPE_CSNP_L2: True,
     clns.PDU_TYPE_PSNP_L1: True,
     # clns.PDU_TYPE_PSNP_L2: True,
-    # clns.PDU_TYPE_LSP_L1: True,
+    clns.PDU_TYPE_LSP_L1: True,
     # clns.PDU_TYPE_LSP_L2: True,
 }
 

@@ -612,6 +612,9 @@ class LanLink (Link):                                       # pylint: disable=R0
         inst = self.linkdb.inst
         lindex = pdu.PDU_FRAME_TYPE_LINDEX[hdr.clns_pdu_type]
         uproc = inst.update[lindex]
+        if not uproc:
+            # If we don't support this level drop it.
+            return False
         adjdb = self.lxlink[lindex].adjdb
 
         #------------------------------------
@@ -645,7 +648,10 @@ class LanLink (Link):                                       # pylint: disable=R0
 
     def receive_lsp (self, pkt, pdubuf, lsphdr, tlvs):
         inst = self.linkdb.inst
-        lindex = pdu.PDU_FRAME_TYPE_LINDEX[lsphdr.clns_pdu_type]
+        try:
+            lindex = pdu.PDU_FRAME_TYPE_LINDEX[lsphdr.clns_pdu_type]
+        except KeyError:
+            util.debug_after(1)
         uproc = inst.update[lindex]
 
         #----------------------------------------

@@ -98,6 +98,10 @@ class TLV (_TLV):
                                                   self._value_string())
 
 
+class SubTLV (TLV):
+    pass
+
+
 class _AddrsTLV (TLV):
     @classmethod
     def _coerce_value (cls, value):
@@ -356,16 +360,26 @@ class ExtIPV4PrefixEntry (object):
         self.metric = entry.metric
         self.updown = entry.updown
         self.pfxlen = entry.pfxlen
+        self.subtlv = True if entry.subtlv else False
         start = sizeof(_ExtIPV4Prefix)
         blen = pfxlen2bytes(self.pfxlen)
         aval = value[start:start + blen] + b"\x00" * (4 - blen)
         self.addr = ipaddress.ip_address(aval)
 
         # Sub-TLV processing.
+        # XXX need to check debugging somehow
+        if self.subtlv:
+            substart = start + blen
+            sublen = tlvrdb(value[substart])
+            substart += 1
+            subspace = value[substart:substart + sublen]
+            self.subtlvs = parse_subtlvs(subspace, {}, True)
+        else:
+            self.subtlvs = defaultdict(list)
 
     def __str__ (self):
-        return "ExtIPV4PrefixEntry(pfx={},metric={},updown={})".format(
-            self.addr, self.metric, self.updown)
+        return "ExtIPV4PrefixEntry(pfx={},metric={},updown={},subtlv={})".format(
+            self.addr, self.metric, self.updown, self.subtlv)
 
 
 class ExtIPV4PrefixesTLV (_ValuesTLV):
@@ -410,16 +424,26 @@ class IPV6PrefixEntry (object):
         self.updown = entry.updown
         self.external = entry.external
         self.pfxlen = entry.pfxlen
+        self.subtlv = True if entry.subtlv else False
         blen = pfxlen2bytes(self.pfxlen)
         start = sizeof(_IPV6Prefix)
         aval = value[start:start + blen] + '\x00' * (16 - blen)
         self.addr = ipaddress.ip_address(aval)
 
         # Sub-TLV processing.
+        # XXX need to check debugging somehow
+        if self.subtlv:
+            substart = start + blen
+            sublen = tlvrdb(value[substart])
+            substart += 1
+            subspace = value[substart:substart + sublen]
+            self.subtlvs = parse_subtlvs(subspace, {}, True)
+        else:
+            self.subtlvs = defaultdict(list)
 
     def __str__ (self):
-        return "IPV6PrefixEntry(pfx={},metric={},updown={},external={})".format(
-            self.addr, self.metric, self.updown, self.external)
+        return "IPV6PrefixEntry(pfx={},metric={},updown={},external={},subtlv={})".format(
+            self.addr, self.metric, self.updown, self.external, self.subtlv)
 
 
 class IPV6PrefixesTLV (_ValuesTLV):
@@ -549,16 +573,29 @@ def tlv_append_value (tlvview, tlvdata, entry):
 class ExtISReachEntry (object):
     def __init__ (self, bufdata):
         blen = len(bufdata)
-        if blen != sizeof(_ISReachEntry):
-            raise ValueError("ISReachEntry unexpected length {}".format(blen))
+        if blen < sizeof(_ExtISReachEntry):
+            raise ValueError("ExtISReachEntry unexpected (short) length {}".format(blen))
         self.entry = util.cast_as(bufdata, _ExtISReachEntry)
         self.neighbor = bytearray(self.entry.neighbor)
         vmetric = self.entry.metric
         self.metric = (vmetric[0] << 16) + (vmetric[1] << 8) + (vmetric[2])
+        self.sublen = self.entry.sublen
+
+        subspace = blen - sizeof(_ExtISReachEntry)
+        self.subtlvs = defaultdict(list)
+        if subspace != self.sublen:
+            logger.warning("Subtlv-len({}) != Actual space({}) skipping sub-tlvs",
+                           self.sublen,
+                           subspace)
+        elif subspace:
+            # Sub-TLV processing.
+            # XXX need to check debugging somehow
+            self.subtlvs = parse_subtlvs(bufdata[sizeof(_ExtISReachEntry):], {}, True)
 
     def __str__ (self):
-        return "IS Extended Reach: {} Metric: {}".format(clns.iso_decode(self.neighbor),
-                                                         self.metric)
+        return "IS Extended Reach: {} Metric: {} Sublen {}".format(clns.iso_decode(self.neighbor),
+                                                                   self.metric,
+                                                                   self.sublen)
 
 
 class ExtISReachTLV (_VariableValuesTLV):
@@ -754,12 +791,12 @@ else:
         return mview[2 + l:]
 
 
-def parse_tlvs (extraptr, dbg):
+def parse_subtlvs (extraptr, tlv_types, dbg):
     tlv_start = util.stringify3(extraptr)                   # copy the tlvspace
 
     tlvs = defaultdict(list)
     v = None
-    for v in tlv_object_iterator(tlv_start):
+    for v in _tlv_object_iterator(tlv_start, tlv_types):
         tlvs[v.type].append(v)
         if dbg:
             logger.info("." * 5 + "{}", v)
@@ -767,6 +804,10 @@ def parse_tlvs (extraptr, dbg):
     if v and dbg:
         logger.info("." * 5)
     return tlvs
+
+
+def parse_tlvs (extraptr, dbg):
+    return parse_subtlvs(extraptr, TLV_TYPES, dbg)
 
 
 def tlv_iterator (bufptr):
@@ -789,7 +830,7 @@ def tlv_iterator (bufptr):
             return
 
 
-def tlv_object_iterator (bufptr):
+def _tlv_object_iterator (bufptr, tlv_types):
     blen = len(bufptr)
     while blen:
         if blen < 2:
@@ -797,15 +838,21 @@ def tlv_object_iterator (bufptr):
             raise ValueError("Remaining TLV space {} not at least 2 bytes".format(blen))
 
         tlv_type = tlvrdb(bufptr[0])
-        if tlv_type in TLV_TYPES:
-            tlv = TLV_TYPES[tlv_type](bufptr)
-        else:
+        if tlv_type in tlv_types:
+            tlv = tlv_types[tlv_type](bufptr)
+        elif tlv_types == TLV_TYPES:
             tlv = TLV(bufptr)
+        else:
+            tlv = SubTLV(bufptr)
 
         yield tlv
 
         bufptr = bufptr[tlv.len + 2:]
         blen = len(bufptr)
+
+
+def tlv_object_iterator (bufptr):
+    return _tlv_object_iterator (bufptr, TLV_TYPES)
 
 
 #========================
