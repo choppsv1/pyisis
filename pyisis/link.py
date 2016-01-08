@@ -62,10 +62,16 @@ class LinkDB (object):
         return self.lock.__exit__(*args)
 
     def add_link (self, ifname):
+        if ifname.endswith(":p2p"):
+            ifname = ifname.replace(":p2p", "")
+            p2plan = True
         with self:
             index = len(self.links)
             ctype = (clns.CTYPE_L12 & self.inst.is_type)
-            link = LanLink(self, ifname, index, ctype)
+            if p2plan:
+                link = P2PLanLink(self, ifname, index, ctype)
+            else:
+                link = LanLink(self, ifname, index, ctype)
             fd = link.getfd()
             self.links.append(link)
             self.linkfds.add(fd)
@@ -445,12 +451,13 @@ class Link (object):
             return
 
 
-class LanLink (Link):                                       # pylint: disable=R0904
+class _LanLink (Link):                                       # pylint: disable=R0904
     """LAN Link Object"""
 
-    def __init__ (self, linkdb, ifname, index, circtype):
+    def __init__ (self, linkdb, ifname, index, circtype, p2p=False):
+        super(_LanLink, self).__init__(linkdb, ifname, index, circtype)
 
-        super(LanLink, self).__init__(linkdb, ifname, index, circtype)
+        self.is_p2p_link = p2p
 
         # index + 1 to avoid 0 which we use for all p2p links.
         self.local_circuit_id = index + 1
@@ -462,10 +469,6 @@ class LanLink (Link):                                       # pylint: disable=R0
         self.std_isis_dis_hello_timer = self.std_isis_hello_timer // 3
         self.std_isis_hello_multipier = 3
         self.mtu = 1514
-
-        self.lxlink = [ None, None ]
-        for lindex in self.enabled_lindex:
-            self.lxlink[lindex] = LxLanLink(self, lindex)
 
     def get_pdu_mtu (self):
         return self.mtu - sizeof(pdu.LLCFrame)
@@ -533,6 +536,28 @@ class LanLink (Link):                                       # pylint: disable=R0
         iih.priority = lxlink.priority
         iih.reserved = 0
         memcpy(iih.lan_id, lxlink.lanid)
+
+        # Get pointer to tlv space
+        return iih, buf, tlvview
+
+    def get_p2p_iih_buffer (self):
+        maxsize = self.get_pdu_mtu()
+        for lindex in [0, 1]:
+            if self.is_lindex_enabled(lindex):
+                maxsize = max(maxsize, clns.originatingLxLSPBufferSize(lindex))
+
+        pdu_type = clns.PDU_TYPE_IIH_P2P
+        iih, buf, tlvview = pdu.get_pdu_buffer(maxsize, pdu_type)
+
+        # Add in ether header
+        iih.clns_len += sizeof(pdu.EtherHeader)
+
+        iih.circuit_type = self.circtype
+        memcpy(iih.source_id, self.linkdb.inst.sysid)
+        lxlink = self.p2plxlink
+        iih.hold_time = lxlink.hello_interval * lxlink.hello_multiplier
+        iih.reserved = 0
+        iih.local_circuit_id = 0
 
         # Get pointer to tlv space
         return iih, buf, tlvview
@@ -685,8 +710,11 @@ class LanLink (Link):                                       # pylint: disable=R0
             extra = 46 - pktlen
             pktlen = 46
 
-        lindex = pdu.PDU_FRAME_TYPE_LINDEX[pduframe.clns_pdu_type]
-        llcframe = self.get_llc_frame(lindex)
+        if self.is_p2p_link:
+            llcframe = self.get_llc_frame()
+        else:
+            lindex = pdu.PDU_FRAME_TYPE_LINDEX[pduframe.clns_pdu_type]
+            llcframe = self.get_llc_frame(lindex)
         llcframe.ether_type = pktlen
         pduframe.pdu_len = pdulen
         vec = [llcframe, pdubuf[:pdulen]]
@@ -829,10 +857,62 @@ class LanLink (Link):                                       # pylint: disable=R0
             self.rawintf.writev([llcframe, lspseg.pdubuf])
 
 
+class P2PLanLink (_LanLink):
+    def __init__ (self, linkdb, ifname, index, circtype):
+        super(P2PLanLink, self).__init__(linkdb, ifname, index, circtype, True)
+
+        self.lxlink = [ None, None ]
+        self.p2plxlink = LxP2PLanLink(self)
+
+    def receive_iih (self, unused_pkt, pdubuf, iih, tlvs):
+        inst = self.linkdb.inst
+
+        #------------------
+        # ISO10589 8.4.2.1
+        #------------------
+
+        if not self.check_pdu(iih, pdubuf, tlvs):
+            return
+
+        #-----------------------------
+        # Process the TLVs and packet
+        #-----------------------------
+
+        lindex = pdu.PDU_FRAME_TYPE_LINDEX[iih.clns_pdu_type]
+        if lindex == 0:
+            # Reject if we receive 0 or more than 1 AreaAddrTLV
+            atlv = tlvs[tlv.TLV_AREA_ADDRS]
+            if len(atlv) != 1:
+                logger.info("TRAP areaMismatch: Incorrect area TLV count: {}", len(atlv))
+                return False
+            atlv = atlv[0]
+            for addr in atlv.addrs:
+                if addr == inst.areaid:
+                    break
+            else:
+                logger.info("TRAP areaMismatch: {}: {}", atlv, clns.iso_decode(inst.areaid))
+                return False
+
+        # All checks have passed simply process the hello.
+        lxlink = self.lxlink[lindex]
+        if lxlink.adjdb.update_adjacency(iih, tlvs):
+            lxlink.dis_election_info_changed()
+
+
+class LanLink (_LanLink):
+    def __init__ (self, linkdb, ifname, index, circtype):
+        super(LanLink, self).__init__(linkdb, ifname, index, circtype, False)
+
+        self.lxlink = [ None, None ]
+        for lindex in self.enabled_lindex:
+            self.lxlink[lindex] = LxLanLink(self, lindex)
+
+
 LanLink.receive_pdu_method = {
     clns.PDU_TYPE_IIH_LAN_L1: LanLink.receive_iih,
     clns.PDU_TYPE_IIH_LAN_L2: LanLink.receive_iih,
-    # clns.PDU_TYPE_IIH_P2P: Link.receive_iih,
+    # XXXp2p different rx routine?
+    clns.PDU_TYPE_IIH_P2P: P2PLanLink.receive_iih,
     clns.PDU_TYPE_LSP_L1: LanLink.receive_lsp,
     clns.PDU_TYPE_LSP_L2: LanLink.receive_lsp,
     clns.PDU_TYPE_CSNP_L1: LanLink.receive_snp,
@@ -840,6 +920,79 @@ LanLink.receive_pdu_method = {
     clns.PDU_TYPE_PSNP_L1: LanLink.receive_snp,
     clns.PDU_TYPE_PSNP_L2: LanLink.receive_snp,
 }
+
+
+class LxP2PLanLink (object):
+    """Level "Specific" P2P LAN Link Object"""
+    def __init__ (self, link):
+        self.dis = None
+
+        # Possibly create 2 AdjLinkDBs
+        for lindex in [ 0, 1 ]:
+            if link.is_lindex_enabled(lindex):
+                self.adjdb = adjacency.AdjLinkDB(link, lindex)
+
+        self.link = link
+        self.sysid = link.sysid
+        self.hello_interval = link.std_isis_hello_timer
+        self.hello_multiplier = link.std_isis_hello_multipier
+
+        #-------------
+        # Hello Timer
+        #-------------
+        self.iih_timer = timers.Timer(link.linkdb.timerheap,
+                                      .25,
+                                      self.p2p_iih_expire)
+        # XXX self.iih_timer.start(self.hello_interval)
+        self.iih_timer.start(1)
+
+        # #------------
+        # # CSNP timer
+        # #------------
+        # self.csnp_timer = timers.Timer(link.linkdb.timerheap,
+        #                                0,
+        #                                self.csnp_expire)
+
+    def __str__ (self):
+        sstr = "L"
+        if self.link.is_lindex_enabled(0):
+            sstr += "1"
+        if self.link.is_lindex_enabled(1):
+            sstr += "2"
+        return "LxP2PLanLink({}: {})".format(sstr, self.link.ifname)
+
+    def p2p_iih_expire (self):
+        # XXX only removed stuff from iih_expire so refactor
+        iih, pdubuf, tlvview = self.link.get_p2p_iih_buffer()
+        tlvspace = len(tlvview)
+
+        # Add Area Addresses
+        areaid = self.link.linkdb.inst.areaid
+        areaval = bchr(len(areaid)) + areaid
+        tlvview = tlv.tlv_append(tlvview, tlv.TLV_AREA_ADDRS, areaval)
+
+        # # Add IS Neighbors
+        tlvview, unused = tlv.tlv_insert_entries(tlv.TLV_IS_NEIGHBORS,
+                                                 tlvview,
+                                                 self.adjdb.neighbor_iih_tlv_iter)
+
+        # Add NLPID
+        tlvview = tlv.tlv_append(tlvview, tlv.TLV_NLPID, bchr(clns.NLPID_IPV4))
+
+        # Add IPv4 Interface Address
+        tlvview = tlv.tlv_append(tlvview,
+                                 tlv.TLV_IPV4_INTF_ADDRS,
+                                 self.link.ipv4_prefix.ip.packed)
+
+        # Add Padding
+        while len(tlvview) >= 2:
+            padlen = min(255, len(tlvview) - 2)
+            tlvview = tlv.tlv_pad(tlvview, padlen)
+
+        # TLV space is original space minus what we have leftover.
+        extra = tlvspace - len(tlvview)
+        self.link.send_pdu(iih, pdubuf, extra)
+        self.iih_timer.start(self.hello_interval)
 
 
 class LxLanLink (object):
