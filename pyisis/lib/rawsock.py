@@ -154,9 +154,14 @@ class RawInterface (object):
     def get_if_addrs (self):
         ifname = self.name
         # codes are different for mac and linux
-        output = subprocess.check_output("/sbin/ifconfig {}".format(ifname),
-                                         shell=True,
-                                         universal_newlines=True)
+        try:
+            output = subprocess.check_output("/sbin/ifconfig {}".format(ifname),
+                                             shell=True,
+                                             universal_newlines=True)
+        except subprocess.CalledProcessError:
+            output = subprocess.check_output("/sbin/ip link show {}".format(ifname),
+                                             shell=True,
+                                             universal_newlines=True)
         match = re.search(r"(?:HWaddr|ether) ([a-zA-Z0-9:]+)", output)
         assert match
         mac_addr = clns.mac_encode(match.group(1))
@@ -164,11 +169,15 @@ class RawInterface (object):
         # inet addr:192.168.1.10  Bcast:192.168.1.255  Mask:255.255.255.0
         match = re.search(r"inet (?:addr:)?([0-9\.]+).*(?:Mask:|netmask )([0-9\.]+)", output)
         # mask = ipaddress.ip_address(match.group(2))
-        ipv4_prefix = ipaddress.ip_interface('{}/{}'.format(*match.groups()))
+        if not match:
+            ipv4_prefix = None
+        else:
+            ipv4_prefix = ipaddress.ip_interface('{}/{}'.format(*match.groups()))
         # ipv4_prefix = ipaddress.ip_interface('{}/24'.format(match.group(1)))
         # ipv4_prefix = ipaddress.ip_interface('{}/24'.format(match.group(1)))
 
         return mac_addr, ipv4_prefix
+
 
 __author__ = 'Christian Hopps'
 __date__ = 'October 28 2014'

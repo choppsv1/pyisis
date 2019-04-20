@@ -76,7 +76,8 @@ class LinkDB (object):
         def intf_ipv4_iter ():
             with self:
                 for link in self.links:
-                    yield link.ipv4_prefix.ip.packed
+                    if link.ipv4_prefix:
+                        yield link.ipv4_prefix.ip.packed
         return intf_ipv4_iter
 
     def get_lsp_nbr_iter (self, lindex):
@@ -998,9 +999,10 @@ class LxLanLink (object):
         tlvview = tlv.tlv_append(tlvview, tlv.TLV_NLPID, bchr(clns.NLPID_IPV4))
 
         # Add IPv4 Interface Address
-        tlvview = tlv.tlv_append(tlvview,
-                                 tlv.TLV_IPV4_INTF_ADDRS,
-                                 self.link.ipv4_prefix.ip.packed)
+        if self.link.ipv4_prefix:
+            tlvview = tlv.tlv_append(tlvview,
+                                    tlv.TLV_IPV4_INTF_ADDRS,
+                                    self.link.ipv4_prefix.ip.packed)
 
         # Add Padding
         while len(tlvview) >= 2:
