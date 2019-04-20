@@ -17,7 +17,7 @@
 from __future__ import absolute_import, division, nested_scopes, print_function, unicode_literals
 import pyisis.clns as clns
 
-FLAGDBG = False
+FLAGDBG = True
 PKTDBG = True
 PKTDBGTYPE = {
     # clns.PDU_TYPE_IIH_LAN_L1: True,

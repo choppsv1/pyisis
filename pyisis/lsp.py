@@ -407,7 +407,7 @@ class OwnLSP (object):
 
     def regen_pn_lsp (self):
         lindex = self.lindex
-        logger.info("L{} Non-PN LSP Generation starts", lindex + 1)
+        logger.info("L{} PN LSP Generation starts", lindex + 1)
         cputimer = util.CPUTimer()
 
         buflist = []

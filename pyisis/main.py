@@ -48,7 +48,8 @@ def main ():
     parser = argparse.ArgumentParser()
     parser.add_argument('-a', '--areaid', default='00', help='The Area id')
     parser.add_argument('-p', '--priority', type=int, default=64, help='Priority to run links at')
-    parser.add_argument('-s', '--sysid', help='The system id')
+    parser.add_argument('-s', '--sysid', default="1111.1111.1111", help='The system id')
+    parser.add_argument("-v", "--verbose", action="store_true", help="Verbose logging")
     parser.add_argument('--is-type', default='l1', choices=["l1", "l2", "l12"],
                         help='the is-type [l1, l2, l12]')
     parser.add_argument('interfaces',
@@ -65,6 +66,17 @@ def main ():
     #---------------------
 
     args = parser.parse_args()
+
+
+    if args.verbose:
+        level = logbook.DEBUG
+    else:
+        level = logbook.INFO
+    # If our stream handler doesn't handle it drop the message
+    logbook.NullHandler().push_application()
+    # Print to stdout at given level or above
+    handler = logbook.StreamHandler(sys.stdout, level=level, encoding="utf-8", bubble=False)
+    handler.push_application()
 
     if args.is_type == "l1":
         is_type = clns.CTYPE_L1
@@ -87,7 +99,7 @@ def main ():
         while True:
             inst.linkdb.process_packets()
     except Exception as ex:
-        logger.error("UNEXPECTED EXCEPTION: {}", ex)
+        logger.error("UNEXPECTED EXCEPTION: %s", str(ex))
     except:                                                 # pylint: disable=W0702
         logger.error("UNEXPECTED EXCEPTION")
 

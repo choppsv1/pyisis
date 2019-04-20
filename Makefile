@@ -51,3 +51,6 @@ test2:
 test3:
 	@echo "Running python v3 tests"
 	$(PYTEST3) -v --doctest-modules
+
+docker:
+	docker build --network=host -t pyisis .
